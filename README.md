@@ -46,9 +46,9 @@ This launches the app and opens it in your default web browser. Upload your
 
 ```
 synaptic_protein_analysis/
-├── Hello.py              # Home page (file upload)
-├── analysis_pipeline.py  # Core image-processing and analysis functions
-├── requirements.txt      # Python dependencies
+├── Hello.py
+├── analysis_pipeline.py
+├── requirements.txt
 └── pages/
     ├── 1_Gallery.py
     ├── 2_Research.py
