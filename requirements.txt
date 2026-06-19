@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+matplotlib
+seaborn
+scipy
+Pillow
+opencv-python-headless
+readlif
+hdbscan
