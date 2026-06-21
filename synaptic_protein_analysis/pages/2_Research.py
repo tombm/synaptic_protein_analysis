@@ -1,21 +1,15 @@
+
 import streamlit as st
-import pandas as pd
 import matplotlib.pyplot as plt
 import analysis_pipeline as ap
-import importlib
 from analysis_pipeline import style_df
-
-importlib.reload(ap)
 
 
 st.markdown(
     """
     # Research
     ### Parameter Adjustments
-    """)
 
-st.markdown(
-    """
     In this page you can select an image, and adjust it's parameters individually for each stage of the analysis pipeline.
     ### Pipeline Stages:
     - Contrast Enhancement
@@ -93,28 +87,23 @@ if st.session_state['images_df'] is not None:
 
     # CONTRAST
 
-    st.markdown(
-        """
-        **Contrast Enhancement**
-        """
-    )
-    #st.write('Contrast Enhancement')
+    st.markdown("""**Contrast Enhancement**""")
     default_lower_percentile, default_upper_percentile = [60, 0]
 
     selected_lower = st.slider(
         'Choose **Lower** Percentile (clip darkest)',
         min_value=0,
         max_value=100,
-        value=default_lower_percentile,  # Initial value
-        key='lower_th_slider'  # REQUIRED: Unique key for the first slider
+        value=default_lower_percentile,
+        key='lower_th_slider'
     )
 
     selected_upper = st.slider(
         'Choose **Upper** Percentile (clip brightest)',
         min_value=0,
         max_value=100,
-        value=default_upper_percentile,  # Initial value
-        key='upper_th_slider'  # REQUIRED: Unique key for the second slider
+        value=default_upper_percentile,
+        key='upper_th_slider'
     )
 
     lower_percentile = selected_lower
@@ -135,8 +124,8 @@ if st.session_state['images_df'] is not None:
         'Choose binary mask threshold:',
         min_value=0,
         max_value=255,
-        value=default_th,  # Initial value
-        key='th_slider'  # REQUIRED: Unique key for the first slider
+        value=default_th,
+        key='th_slider'
     )
 
     binary_mask, per_above_hundred = ap.constant_th(contrasted_img, th=selected_th)
@@ -154,8 +143,8 @@ if st.session_state['images_df'] is not None:
         'Choose a max size for small dots removal:',
         min_value=0,
         max_value=30,
-        value=default_dots_th,  # Initial value
-        key='dots_removal_slider'  # REQUIRED: Unique key for the first slider
+        value=default_dots_th,
+        key='dots_removal_slider'
     )
 
     filtered_bm = ap.remove_small_objects(binary_mask, min_size=selected_dots_th)
@@ -225,7 +214,6 @@ if st.session_state['images_df'] is not None:
         st.session_state[f'labeling_{selected_channel}']["Min Samples"].append(selected_min_samples)
         st.session_state[f'labeling_{selected_channel}']["Min Cluster Size"].append(selected_min_cluster_size)
         st.success("Results saved!")
-
 
 
 else:

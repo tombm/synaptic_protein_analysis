@@ -1,22 +1,17 @@
+
 import numpy as np
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import analysis_pipeline as ap
-import importlib
-from analysis_pipeline import style_df
-
-importlib.reload(ap)
 
 
 st.markdown("# Statistical Analysis")
-#st.sidebar.header("Gallery")
 st.write(
     """
     In this page you can select overall TH values based on the research results.
     Then, apply the TH values you've selected on the entire dataset, run the analysis process and get results.
-    """
-)
+    """)
 
 images_df = st.session_state['images_df']
 
@@ -39,7 +34,6 @@ if st.session_state['images_df'] is not None:
         for channel in ['Pre', 'Post']:
             labeled_data = pd.DataFrame.from_dict(st.session_state[f'labeling_{channel}'])
 
-            #st.table(st.session_state['labeling'])
             st.markdown(f"### {channel} labeling")
             st.table(labeled_data)
 
@@ -47,8 +41,6 @@ if st.session_state['images_df'] is not None:
     except:
         st.error('Save research results first')
 
-    # st.table(images_df)
-    # st.write(f'{type(images_df)}')
 
     # Analysis parameters (use defaults or could be loaded from saved labeling)
     st.subheader("Analysis Parameters")
@@ -131,7 +123,6 @@ if st.session_state['images_df'] is not None:
             mime="text/csv",
             key="stats_download_csv",
         )
-
 
 
         st.subheader("Analysis Results")
@@ -233,7 +224,6 @@ if st.session_state['images_df'] is not None:
                     plt.close(fig)
                 else:
                     st.warning(f"No intensity data available for {channel} channel")
-
 
 
 else:

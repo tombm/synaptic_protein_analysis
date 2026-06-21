@@ -1,18 +1,10 @@
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-import analysis_pipeline as ap
-import importlib
-from analysis_pipeline import style_df
 
-importlib.reload(ap)
+import streamlit as st
+import matplotlib.pyplot as plt
 
 
 st.markdown("# Image Gallery")
-#st.sidebar.header("Gallery")
-st.write(
-    """In this page you can see all images from the file, in their original form."""
-)
+st.write("In this page you can see all images from the file, in their original form.")
 
 images_df = st.session_state['images_df']
 
@@ -21,7 +13,8 @@ if st.session_state['images_df'] is not None:
 
     for filename in filenames:
         with st.expander(f"📁 {filename}", expanded=True):
-            file_images = st.session_state['images_df'][st.session_state['images_df']['Filename'] == filename]
+            file_images = st.session_state['images_df'][
+                st.session_state['images_df']['Filename'] == filename]
 
             for index, row in file_images.iterrows():
                 st.markdown(f"**{row['Image name']}** — Area: {row['Area']}")

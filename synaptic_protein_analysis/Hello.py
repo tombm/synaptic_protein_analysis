@@ -1,9 +1,8 @@
+
 import streamlit as st
 import pandas as pd
 import analysis_pipeline as ap
-import importlib
 
-importlib.reload(ap)
 
 
 metadata_columns = ['Filename', 'Image name', 'Group', 'Area', 'Pre', 'Post', 'Pre results', 'Post results']

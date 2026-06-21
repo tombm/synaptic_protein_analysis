@@ -7,19 +7,19 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from PIL import Image
 import hdbscan
-
 from scipy.stats import ttest_ind
 
 
 areas = ['DG', 'SUB', 'MF', 'CA1', 'CA3', 'SSP']
 metadata_columns = ['Filename', 'Image name', 'Group', 'Area', 'Pre', 'Post', 'Pre results', 'Post results']
 
-PALETTE = {
-    "pre_5x":  {"face": "#AD4DCF", "edge": "#6B4FC6", "dot": "#6B4FC6"},
-    "pre_wt":  {"face": "#96969A", "edge": "#7A7A7A", "dot": "#7A7A7A"},
-    "post_5x": {"face": "#590C77", "edge": "#4B30B8", "dot": "#4B30B8"},
-    "post_wt": {"face": "#555555", "edge": "#5F5F5F", "dot": "#5F5F5F"},
+DEFAULT_PALETTE = {
+    "5x": {"face": "#ff9999", "edge": "#cc0000", "dot": "#ff0000"},
+    "wt": {"face": "#99ff99", "edge": "#00cc00", "dot": "#00ff00"},
+    "5x hbot": {"face": "#ffcc99", "edge": "#cc6600", "dot": "#ff8800"},
+    "wt hbot": {"face": "#99ccff", "edge": "#0066cc", "dot": "#0088ff"}
 }
+
 
 S_H_TO_CHANNEL = {"S": "Pre", "H": "Post"}
 
@@ -30,35 +30,9 @@ def read_lif(img_path):
     return lif
 
 # 1 - create DF
-def create_images_df(lif):
-    group = ''
-    imgs_metadata = []
-    img_list = [img for img in lif.get_iter_image()]
-
-    for i, img in enumerate(img_list):
-        img_name = img.name
-
-        if ('5X' in img_name) or ('5x' in img_name):
-            group = '5x'
-        elif 'wt' in img_name.lower():
-            group = 'wt'
-
-        if (i <= len(areas) - 1) and group is not None:
-            area = areas[i]
-
-            ch_imgs = [img.get_frame(c=ch) for ch in range(img.channels)]
-            pre = ch_imgs[3]
-            post = ch_imgs[2]
-
-            img_data = [img_name, img_name, group, area, pre, post, {}, {}]
-            imgs_metadata.append(img_data)
-
-    images_df = pd.DataFrame(imgs_metadata, columns=metadata_columns)
-    return images_df
-
 def create_images_df_mult_files(lif_files: list) -> pd.DataFrame:
     """
-    Process multiple LIF files and combine into a single DataFrame.
+    Processes multiple .lif files and combines them into a single DataFrame.
     Args: lif_files: List of tuples (lif_object, filename) for each uploaded file
     Returns: Combined DataFrame with images from all files
     """
@@ -188,8 +162,7 @@ def create_images_df_paired(paired_metadata):
 # 2 - style DF
 def style_df(df):
     styled = df.style.set_properties(
-        **{"background-color": "#2C2F3A", "color": "#E5E7EB", "border-color": "#111827"}
-    )
+        **{"background-color": "#2C2F3A", "color": "#E5E7EB", "border-color": "#111827"})
     return styled
 
 
@@ -326,12 +299,8 @@ def cluster_staining(img, max_cluster_size=250, min_samples=35, min_cluster_size
 def calculate_cluster_stats(vpoints):
     """
     Calculate cluster statistics from clustering results.
-
-    Args:
-        vpoints: DataFrame with clustered points (output from cluster_staining)
-
-    Returns:
-        dict with cluster statistics including mean_cluster_size, n_clusters, total_points
+    Args: vpoints: DataFrame with clustered points (output from cluster_staining)
+    Returns: dict with cluster statistics including mean_cluster_size, n_clusters, total_points
     """
     if vpoints is None or len(vpoints) == 0 or vpoints['label'].iloc[0] == 0:
         return {
@@ -382,7 +351,6 @@ def view_two_images(img1, img2, title, name1, name2):
     plt.imshow(img2, cmap='gray', vmin=0, vmax=255)
     plt.axis('off')
 
-    #plt.show()
     return fig
 
 
@@ -404,83 +372,6 @@ def view_clustering(title, filtered_bm, vpoints, name1, name2):
     plt.gca().set_aspect('equal')  # match pixel ratio
     plt.axis('off')
 
-    #plt.show()
-    return fig
-
-
-#
-# # BOXPLOT MEAN BRIGHT
-# Assuming your PALETTE is defined globally or passed in
-DEFAULT_PALETTE = {
-    "5x": {"face": "#ff9999", "edge": "#cc0000", "dot": "#ff0000"},
-    "wt": {"face": "#99ff99", "edge": "#00cc00", "dot": "#00ff00"},
-    "5x hbot": {"face": "#ffcc99", "edge": "#cc6600", "dot": "#ff8800"},
-    "wt hbot": {"face": "#99ccff", "edge": "#0066cc", "dot": "#0088ff"}
-}
-
-
-def st_boxplot_comparison(df, stat_col, group_col="Group", title="Comparison", palette=None):
-    """
-    Creates a clean, publication-ready boxplot with jittered dots and p-values.
-    Designed for Streamlit.
-    """
-    palette = palette or DEFAULT_PALETTE
-
-    # 1. Setup Data
-    groups = df[group_col].unique()
-    data_to_plot = [df[df[group_col] == g][stat_col].dropna().values for g in groups]
-
-    # 2. Setup Figure
-    # Using a slightly smaller font size globally for a "clean" look
-    plt.rc('font', size=9)
-    fig, ax = plt.subplots(figsize=(5, 6))
-
-    # 3. Draw Boxplot
-    bp = ax.boxplot(data_to_plot, patch_artist=True, showfliers=False, widths=0.6)
-
-    for i, group_name in enumerate(groups):
-        color_key = group_name.lower()  # normalization
-        style = palette.get(color_key, palette.get("wt"))  # fallback
-
-        # Style Boxes
-        bp["boxes"][i].set(facecolor=style["face"], edgecolor=style["edge"], linewidth=1.5)
-
-        # Style Whiskers/Caps/Medians
-        for part in ["whiskers", "caps"]:
-            plt.setp(bp[part][i * 2:(i * 2) + 2], color="#6b6b6b", linewidth=1.1)
-        plt.setp(bp["medians"][i], color="#222222", linewidth=2)
-
-        # 4. Add Jittered Dots
-        rng = np.random.default_rng(42)
-        y = data_to_plot[i]
-        x = rng.normal(loc=i + 1, scale=0.08, size=len(y))
-        ax.scatter(x, y, s=30, alpha=0.7, color=style["dot"],
-                   edgecolors="black", linewidths=0.5, zorder=3)
-
-    # 5. Stats & Brackets (Welch's T-Test)
-    if len(data_to_plot) == 2:
-        stat_val, p = ttest_ind(data_to_plot[0], data_to_plot[1], equal_var=False)
-        if p < 0.05:
-            y_max = max([arr.max() for arr in data_to_plot])
-            y_range = y_max - min([arr.min() for arr in data_to_plot])
-
-            # Bracket coords
-            y_bracket = y_max + (y_range * 0.1)
-            h = y_range * 0.05
-            ax.plot([1, 1, 2, 2], [y_bracket, y_bracket + h, y_bracket + h, y_bracket], lw=1.2, c="black")
-
-            # Stars
-            stars = "****" if p < 1e-4 else "***" if p < 1e-3 else "**" if p < 1e-2 else "*"
-            ax.text(1.5, y_bracket + h, stars, ha="center", va="bottom", fontsize=12)
-            ax.set_ylim(None, y_bracket + (y_range * 0.3))  # Make room for bracket
-
-    # 6. Styling
-    ax.set_title(title, fontsize=12, pad=15)
-    ax.set_xticklabels([g.upper() for g in groups])
-    ax.yaxis.grid(True, linestyle="--", alpha=0.3)
-    for sp in ["top", "right"]: ax.spines[sp].set_visible(False)
-
-    # 7. Render in Streamlit
     return fig
 
 
@@ -496,8 +387,7 @@ def create_boxplot(data: dict, title="Comparison", ylabel="Value", palette=None,
         palette: Optional color palette dict. If None, uses DEFAULT_PALETTE.
         figsize: Tuple of (width, height) for figure size.
 
-    Returns:
-        matplotlib figure
+    Returns: matplotlib figure
     """
     palette = palette or DEFAULT_PALETTE
 
