@@ -29,6 +29,19 @@ def read_lif(img_path):
     lif = LifFile(img_path)
     return lif
 
+
+def extract_area_from_name(img_name):
+    """
+    Return the brain area found in the image name, matched against the known `areas` list.
+    Returns None if no known area appears in the name
+    """
+    tokens = img_name.upper().replace('-', ' ').replace('_', ' ').split()
+    for area in areas:
+        if area.upper() in tokens:
+            return area
+    return None
+
+
 # 1 - create DF
 def create_images_df_mult_files(lif_files: list) -> pd.DataFrame:
     """
@@ -49,12 +62,24 @@ def create_images_df_mult_files(lif_files: list) -> pd.DataFrame:
 
         img_list = [img for img in lif.get_iter_image()]
 
-        for i, img in enumerate(img_list):
+        # for i, img in enumerate(img_list):
+        #     img_name = img.name
+        #
+        #     if (i <= len(areas) - 1) and group is not None:
+        #         area = areas[i]
+        #
+        #         ch_imgs = [img.get_frame(c=ch) for ch in range(img.channels)]
+        #         pre = ch_imgs[3]
+        #         post = ch_imgs[2]
+        #
+        #         img_data = [filename, img_name, group, area, pre, post, {}, {}]
+        #         imgs_metadata.append(img_data)
+
+        for img in img_list:
             img_name = img.name
+            area = extract_area_from_name(img_name)
 
-            if (i <= len(areas) - 1) and group is not None:
-                area = areas[i]
-
+            if area is not None and group is not None:
                 ch_imgs = [img.get_frame(c=ch) for ch in range(img.channels)]
                 pre = ch_imgs[3]
                 post = ch_imgs[2]
@@ -66,12 +91,12 @@ def create_images_df_mult_files(lif_files: list) -> pd.DataFrame:
     return images_df
 
 
-# TODO S-H
 def extract_paired_metadata(uploaded_files):
     """
     Parse image names from S-H paired LIF files.
     Expected name format: "AREA S" or "AREA H" (e.g., "CA1 H", "DG S").
-
+    Matching is case-insensitive; the area is stored in its canonical form
+    (as listed in `areas`).
     Returns:
         paired_metadata: list of dicts with filename, img_name, region, channel, img
         skipped: list of (filename, img_name) tuples for names that didn't match the format
@@ -79,17 +104,23 @@ def extract_paired_metadata(uploaded_files):
     paired_metadata = []
     skipped = []
 
+    area_lookup = {a.upper(): a for a in areas}
+    sh_lookup = {k.upper(): k for k in S_H_TO_CHANNEL}
+
     for file in uploaded_files:
         lif = read_lif(file)
         for img in lif.get_iter_image():
             img_name = img.name
             parts = img_name.strip().split()
 
-            if len(parts) != 2 or parts[0] not in areas or parts[1] not in S_H_TO_CHANNEL:
+            if (len(parts) != 2
+                    or parts[0].upper() not in area_lookup
+                    or parts[1].upper() not in sh_lookup):
                 skipped.append((file.name, img_name))
                 continue
-            region = parts[0]
-            channel = S_H_TO_CHANNEL[parts[1]]
+
+            region = area_lookup[parts[0].upper()]
+            channel = S_H_TO_CHANNEL[sh_lookup[parts[1].upper()]]
             paired_metadata.append({
                 "filename": file.name,
                 "img_name": img_name,
@@ -100,13 +131,12 @@ def extract_paired_metadata(uploaded_files):
 
     return paired_metadata, skipped
 
-# TODO S-H
+
 def create_images_df_paired(paired_metadata):
     """
     Build a DataFrame from S-H paired metadata.
     Groups entries by (filename, region) and creates one row per valid pair,
     where Pre comes from the S image and Post comes from the H image.
-
     Returns:
         images_df: DataFrame in the same format as create_images_df_mult_files
         skipped_pairs: list of (filename, region, reason) for invalid groupings

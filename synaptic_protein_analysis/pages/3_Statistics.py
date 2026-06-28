@@ -3,6 +3,9 @@ import numpy as np
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import io
+import zipfile
+
 import analysis_pipeline as ap
 
 
@@ -15,8 +18,8 @@ st.write(
 
 images_df = st.session_state['images_df']
 
-if st.session_state['images_df'] is not None:
 
+if st.session_state['images_df'] is not None:
     images_df = st.session_state['images_df']
 
     for index, row in images_df.iterrows():
@@ -41,32 +44,88 @@ if st.session_state['images_df'] is not None:
     except:
         st.error('Save research results first')
 
+    # slider_key: (min, max, default, labeling_column)
+    PARAM_MAP = {
+        "stat_contrast_lower": (0, 100,  60, "Contrast Lower TH"),
+        "stat_contrast_upper": (0, 100,   0, "Contrast Upper TH"),
+        "stat_binary_th":      (0, 255, 100, "Binary Mask TH"),
+        "stat_dots_th":        (0,  30,  10, "Dots TH"),
+        "stat_max_cluster":    (50, 500, 250, "Max Cluster Size"),
+        "stat_min_samples":    (5, 100,  35, "Min Samples"),
+        "stat_min_cluster":    (5, 100,  15, "Min Cluster Size"),
+    }
+    for skey, (_mn, _mx, default, _col) in PARAM_MAP.items():
+        st.session_state.setdefault(skey, default)
 
-    # Analysis parameters (use defaults or could be loaded from saved labeling)
+    if st.button("Set parameters to labeling median"):
+        labeling_all = pd.concat(
+            [pd.DataFrame(st.session_state.get(f"labeling_{c}", {})) for c in ("Pre", "Post")],
+            ignore_index=True,
+        )
+        if labeling_all.empty:
+            st.warning("No saved labeling results — use 'Save Results' on the Research page first.")
+        else:
+            for skey, (mn, mx, _default, col) in PARAM_MAP.items():
+                if col in labeling_all:
+                    st.session_state[skey] = max(mn, min(mx, int(round(labeling_all[col].median()))))
+            st.success("Sliders set to the labeling median.")
+
     st.subheader("Analysis Parameters")
     col1, col2, col3 = st.columns(3)
     with col1:
-        contrast_lower = st.slider("Contrast Lower %", 0, 100, 60, key="stat_contrast_lower")
+        contrast_lower = st.slider("Contrast Lower %", 0, 100, key="stat_contrast_lower")
     with col2:
-        contrast_upper = st.slider("Contrast Upper %", 0, 100, 0, key="stat_contrast_upper")
+        contrast_upper = st.slider("Contrast Upper %", 0, 100, key="stat_contrast_upper")
     with col3:
-        binary_th = st.slider("Binary Threshold", 0, 255, 100, key="stat_binary_th")
+        binary_th = st.slider("Binary Threshold", 0, 255, key="stat_binary_th")
 
     col4, col5, col6, col7 = st.columns(4)
     with col4:
-        dots_th = st.slider("Min Dots Size", 0, 30, 10, key="stat_dots_th")
+        dots_th = st.slider("Min Dots Size", 0, 30, key="stat_dots_th")
     with col5:
-        max_cluster_size = st.slider("Max Cluster Size", 50, 500, 250, key="stat_max_cluster")
+        max_cluster_size = st.slider("Max Cluster Size", 50, 500, key="stat_max_cluster")
     with col6:
-        min_samples = st.slider("Min Samples", 5, 100, 35, key="stat_min_samples")
+        min_samples = st.slider("Min Samples", 5, 100, key="stat_min_samples")
     with col7:
-        min_cluster_size = st.slider("Min Cluster Size", 5, 100, 15, key="stat_min_cluster")
+        min_cluster_size = st.slider("Min Cluster Size", 5, 100, key="stat_min_cluster")
+
+    # download saved labeling + final params
+    labeling_frames = []
+    for channel in ['Pre', 'Post']:
+        ch_df = pd.DataFrame.from_dict(st.session_state.get(f'labeling_{channel}', {}))
+        if not ch_df.empty:
+            ch_df.insert(0, 'Channel', channel)
+            labeling_frames.append(ch_df)
+    labeling_df = pd.concat(labeling_frames, ignore_index=True) if labeling_frames else pd.DataFrame()
+
+    final_params_df = pd.DataFrame([{
+        "Contrast Lower %": contrast_lower,
+        "Contrast Upper %": contrast_upper,
+        "Binary Threshold": binary_th,
+        "Min Dots Size": dots_th,
+        "Max Cluster Size": max_cluster_size,
+        "Min Samples": min_samples,
+        "Min Cluster Size": min_cluster_size,
+    }])
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('labeling_results.csv', labeling_df.to_csv(index=False))
+        zf.writestr('final_clustering_params.csv', final_params_df.to_csv(index=False))
+    zip_buffer.seek(0)
+
+    st.download_button(
+        label="Download parameters as CSV",
+        data=zip_buffer,
+        file_name="analysis_parameters.zip",
+        mime="application/zip",
+        key="stats_params_download",
+    )
+
 
     if st.button('Analyze Results'):
-        # Get all unique groups from the data
         all_groups = images_df['Group'].unique().tolist()
 
-        # Run analysis on all images with progress bar
         total_images = len(images_df)
         progress_bar = st.progress(0, text="Running analysis...")
 
@@ -177,6 +236,7 @@ if st.session_state['images_df'] is not None:
                 else:
                     st.warning(f"No cluster brightness data available for {channel} channel")
 
+
         # Mean Cluster Size Comparison
         with st.expander("Mean Cluster Size Comparison", expanded=True):
             for channel in ['Pre', 'Post']:
@@ -201,6 +261,32 @@ if st.session_state['images_df'] is not None:
                     plt.close(fig)
                 else:
                     st.warning(f"No cluster data available for {channel} channel")
+
+        # Mean Cluster Count Comparison
+        with st.expander("Mean Cluster Count Comparison", expanded=True):
+            for channel in ['Pre', 'Post']:
+                data = {group: [] for group in all_groups}
+                for index, row in images_df.iterrows():
+                    mean_val = row[f'{channel} results'].get('n_clusters')
+                    group = row['Group']
+                    if mean_val is not None and mean_val > 0 and group in data:
+                        data[group].append(mean_val)
+                data = {k: v for k, v in data.items() if len(v) > 0}
+
+                if len(data) > 0:
+                    fig = ap.create_boxplot(
+                        data,
+                        title=f"{channel} - Cluster Count",
+                        ylabel="Number of Clusters",
+                        figsize=(4, 4.8)
+                    )
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        st.pyplot(fig, use_container_width=False)
+                    plt.close(fig)
+                else:
+                    st.warning(f"No cluster count data available for {channel} channel")
+
 
         # Intensity Distribution
         with st.expander("Intensity Distribution", expanded=True):
