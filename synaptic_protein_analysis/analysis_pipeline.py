@@ -10,8 +10,15 @@ import hdbscan
 from scipy.stats import ttest_ind
 
 
-areas = ['DG', 'SUB', 'MF', 'CA1', 'CA3', 'SSP']
+AREAS = ['DG', 'SUB', 'MF', 'CA1', 'CA3', 'SSP']
 metadata_columns = ['Filename', 'Image name', 'Group', 'Area', 'Pre', 'Post', 'Pre results', 'Post results']
+
+GROUP_CODE_TO_LABEL = {
+    "5XH": "5x hbot",
+    "WTH": "wt hbot",
+    "5X":  "5x",
+    "WT":  "wt",
+}
 
 DEFAULT_PALETTE = {
     "5x": {"face": "#ff9999", "edge": "#cc0000", "dot": "#ff0000"},
@@ -20,9 +27,7 @@ DEFAULT_PALETTE = {
     "wt hbot": {"face": "#99ccff", "edge": "#0066cc", "dot": "#0088ff"}
 }
 
-
 S_H_TO_CHANNEL = {"S": "Pre", "H": "Post"}
-
 
 
 def read_lif(img_path):
@@ -36,10 +41,22 @@ def extract_area_from_name(img_name):
     Returns None if no known area appears in the name
     """
     tokens = img_name.upper().replace('-', ' ').replace('_', ' ').split()
-    for area in areas:
+    for area in AREAS:
         if area.upper() in tokens:
             return area
     return None
+
+
+def extract_group_from_name(name):
+    """
+    return the group label from a code token in the name (case-insensitive).
+    Codes: wt, 5x, wth, 5xh. Returns '' if none found
+    """
+    tokens = set(name.upper().replace('-', ' ').replace('_', ' ').split())
+    for code in ("5XH", "WTH", "5X", "WT"):
+        if code in tokens:
+            return GROUP_CODE_TO_LABEL[code]
+    return ''
 
 
 # 1 - create DF
@@ -52,28 +69,10 @@ def create_images_df_mult_files(lif_files: list) -> pd.DataFrame:
     imgs_metadata = []
 
     for lif, filename in lif_files:
-        group = ''
-        if '5x' in filename.lower():
-            group = '5x'
-        elif 'wt' in filename.lower():
-            group = 'wt'
-        if (group and 'hbot' in filename.lower()):
-            group += ' hbot'
+
+        group = extract_group_from_name(filename)
 
         img_list = [img for img in lif.get_iter_image()]
-
-        # for i, img in enumerate(img_list):
-        #     img_name = img.name
-        #
-        #     if (i <= len(areas) - 1) and group is not None:
-        #         area = areas[i]
-        #
-        #         ch_imgs = [img.get_frame(c=ch) for ch in range(img.channels)]
-        #         pre = ch_imgs[3]
-        #         post = ch_imgs[2]
-        #
-        #         img_data = [filename, img_name, group, area, pre, post, {}, {}]
-        #         imgs_metadata.append(img_data)
 
         for img in img_list:
             img_name = img.name
@@ -104,7 +103,7 @@ def extract_paired_metadata(uploaded_files):
     paired_metadata = []
     skipped = []
 
-    area_lookup = {a.upper(): a for a in areas}
+    area_lookup = {a.upper(): a for a in AREAS}
     sh_lookup = {k.upper(): k for k in S_H_TO_CHANNEL}
 
     for file in uploaded_files:
@@ -163,13 +162,7 @@ def create_images_df_paired(paired_metadata):
             continue
 
         # Determine group from filename (same logic as create_images_df_mult_files)
-        group = ''
-        if '5x' in filename.lower():
-            group = '5x'
-        elif 'wt' in filename.lower():
-            group = 'wt'
-        if group and 'hbot' in filename.lower():
-            group += ' hbot'
+        group = extract_group_from_name(filename)
 
         # Pre channel from S image, Post channel from H image
         s_img = s_entry["img"]
